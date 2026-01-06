@@ -49,6 +49,12 @@ public class ChatService {
     @Autowired(required = false)
     private com.smartdoc.aiengine.service.EnhancedRetrievalService enhancedRetrievalService;
 
+    @Autowired(required = false)
+    private com.smartdoc.aiengine.service.HybridRetrievalService hybridRetrievalService;
+
+    @Autowired(required = false)
+    private com.smartdoc.aiengine.service.LayeredContextService layeredContextService;
+
     private static final String CHAT_HISTORY_KEY = "chat:history:";
 
     @Autowired(required = false)
@@ -73,8 +79,24 @@ public class ChatService {
         chatMessage.setCreateTime(LocalDateTime.now());
 
         try {
-            // 获取对话历史
-            List<LLMService.ChatMessage> chatHistory = getChatHistory(userId, documentId);
+            // 使用分层上下文管理（如果可用）
+            List<Map<String, String>> layeredMessages = null;
+            if (layeredContextService != null) {
+                // 构建分层上下文
+                com.smartdoc.aiengine.service.LayeredContextService.LayeredContext context = 
+                        layeredContextService.buildContext(userId, documentId, question);
+                
+                // 转换为消息列表
+                layeredMessages = layeredContextService.convertToMessages(context, question);
+                log.info("使用分层上下文管理: 短期记忆={}, 长期记忆={}, 关键信息={}", 
+                        context.getShortTermMemory().size(), 
+                        context.getLongTermMemory().size(),
+                        context.getKeyInfo().size());
+            } else {
+                // 回退到传统方式
+                List<LLMService.ChatMessage> chatHistory = getChatHistory(userId, documentId);
+                layeredMessages = LLMService.formatChatHistory(chatHistory);
+            }
 
             String answer;
             List<MilvusService.SearchResult> searchResults;
@@ -82,9 +104,13 @@ public class ChatService {
 
             if (documentId != null) {
                 // 文档问答模式
-                // 使用增强检索服务（如果可用）
-                if (enhancedRetrievalService != null) {
-                    // 使用增强检索：混合检索 + 重排序 + 去重
+                // 优先使用混合检索（Elasticsearch + Milvus + Reranker）
+                if (hybridRetrievalService != null) {
+                    // 使用混合检索：ES关键词检索 + Milvus向量检索 + BGE-Reranker重排序
+                    searchResults = hybridRetrievalService.hybridSearch(question, documentId, 5);
+                    log.info("使用混合检索（ES+向量+Reranker），返回 {} 条结果", searchResults.size());
+                } else if (enhancedRetrievalService != null) {
+                    // 回退到增强检索：混合检索 + 重排序 + 去重
                     searchResults = enhancedRetrievalService.enhancedSearch(question, documentId, 5);
                     log.info("使用增强检索，返回 {} 条结果", searchResults.size());
                 } else {
@@ -126,9 +152,13 @@ public class ChatService {
                 }
 
                 if (hasRelevantResults) {
-                    // 找到相关文档内容，使用RAG模式
-                    answer = llmService.generateAnswerWithContext(question, searchResults, 
-                            LLMService.formatChatHistory(chatHistory));
+                    // 找到相关文档内容，使用RAG模式（使用分层上下文）
+                    com.smartdoc.aiengine.service.LayeredContextService.LayeredContext context = null;
+                    if (layeredContextService != null) {
+                        context = layeredContextService.buildContext(userId, documentId, question);
+                    }
+                    answer = llmService.generateAnswerWithContext(question, searchResults, layeredMessages,
+                            context != null ? context.getKeyInfo() : null);
                     
                     // 保存来源文本块ID
                     List<String> chunkIds = searchResults.stream()
@@ -136,16 +166,14 @@ public class ChatService {
                             .collect(Collectors.toList());
                     chatMessage.setSourceChunks(JSON.toJSONString(chunkIds));
                 } else {
-                    // 未找到相关文档内容，使用通用问答
+                    // 未找到相关文档内容，使用通用问答（使用分层上下文）
                     log.warn("未找到相关文档内容，使用通用问答: question={}", question);
-                    answer = llmService.generateGeneralAnswer(question, 
-                            LLMService.formatChatHistory(chatHistory));
+                    answer = llmService.generateGeneralAnswer(question, layeredMessages);
                     isGeneralAnswer = true;
                 }
             } else {
-                // 通用问答模式
-                answer = llmService.generateGeneralAnswer(question, 
-                        LLMService.formatChatHistory(chatHistory));
+                // 通用问答模式（使用分层上下文）
+                answer = llmService.generateGeneralAnswer(question, layeredMessages);
                 isGeneralAnswer = true;
             }
 
@@ -156,8 +184,12 @@ public class ChatService {
             // 保存到数据库
             chatMessageMapper.insert(chatMessage);
 
-            // 更新Redis中的对话历史（最近10条）
-            updateChatHistory(userId, documentId, question, answer);
+            // 更新对话历史（使用分层上下文管理）
+            if (layeredContextService != null) {
+                layeredContextService.saveConversation(userId, documentId, question, answer);
+            } else {
+                updateChatHistory(userId, documentId, question, answer);
+            }
 
             log.info("问答完成: messageId={}", chatMessage.getId());
             return chatMessage;

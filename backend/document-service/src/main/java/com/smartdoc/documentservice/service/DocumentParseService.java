@@ -51,6 +51,9 @@ public class DocumentParseService {
     @Autowired
     private MilvusService milvusService;
 
+    @Autowired(required = false)
+    private com.smartdoc.aiengine.service.ElasticsearchService elasticsearchService;
+
     @Value("${minio.endpoint:http://localhost:9000}")
     private String minioEndpoint;
 
@@ -137,8 +140,15 @@ public class DocumentParseService {
             // 向量化
             List<List<Float>> vectors = embeddingService.embedTexts(chunkContents);
 
-            // 存入Milvus
+            // 存入Milvus（向量索引）
             milvusService.insertVectors(documentId, chunkIds, chunkContents, vectors);
+
+            // 构建Elasticsearch索引（关键词索引）
+            if (elasticsearchService != null) {
+                // 获取文档标题（从文件名提取）
+                String documentTitle = extractDocumentTitle(objectName);
+                elasticsearchService.indexChunks(documentId, documentTitle, chunks);
+            }
 
             log.info("文档解析完成: documentId={}, 分片数={}", documentId, chunks.size());
             
@@ -233,6 +243,26 @@ public class DocumentParseService {
         String text = stripper.getText(document);
         document.close();
         return text;
+    }
+
+    /**
+     * 从对象名提取文档标题
+     */
+    private String extractDocumentTitle(String objectName) {
+        if (objectName == null || objectName.isEmpty()) {
+            return "未命名文档";
+        }
+        
+        // 提取文件名（去掉路径和扩展名）
+        int lastSlash = objectName.lastIndexOf('/');
+        String fileName = lastSlash >= 0 ? objectName.substring(lastSlash + 1) : objectName;
+        
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot > 0) {
+            fileName = fileName.substring(0, lastDot);
+        }
+        
+        return fileName;
     }
 }
 

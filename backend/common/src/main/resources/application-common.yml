@@ -43,6 +43,31 @@ milvus:
   collection: ${MILVUS_COLLECTION:document_vectors}
   timeout: ${MILVUS_TIMEOUT:30000}
 
+# Elasticsearch配置
+elasticsearch:
+  host: ${ELASTICSEARCH_HOST:localhost}
+  port: ${ELASTICSEARCH_PORT:9200}
+  index: ${ELASTICSEARCH_INDEX:document_chunks}
+
+# BGE-Reranker配置
+reranker:
+  enabled: ${RERANKER_ENABLED:false}
+  api-url: ${RERANKER_API_URL:http://localhost:8001/rerank}
+
+# 分层上下文管理配置
+context:
+  # 短期记忆配置
+  short-term:
+    window-size: ${SHORT_TERM_WINDOW_SIZE:5}  # 滑动窗口大小（轮数）
+  # 长期记忆配置
+  long-term:
+    enabled: ${LONG_TERM_ENABLED:true}
+    collection: ${LONG_TERM_COLLECTION:chat_history_vectors}
+    top-k: ${LONG_TERM_TOP_K:3}  # 检索Top K条历史对话
+  # 关键信息配置
+  key-info:
+    enabled: ${KEY_INFO_ENABLED:true}
+
 # AI服务配置
 ai:
   # Embedding服务配置

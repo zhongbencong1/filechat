@@ -34,8 +34,17 @@ public class LLMService {
     private String model;
 
     /**
-     * 基于文档内容生成回答（RAG模式）
+     * 基于文档内容生成回答（RAG模式）- 使用分层上下文
      */
+    public String generateAnswerWithContext(String question, List<MilvusService.SearchResult> searchResults, 
+                                          List<Map<String, String>> layeredMessages) {
+        return generateAnswerWithContext(question, searchResults, layeredMessages, null);
+    }
+
+    /**
+     * 基于文档内容生成回答（RAG模式）- 兼容旧版本
+     */
+    @Deprecated
     public String generateAnswerWithContext(String question, List<MilvusService.SearchResult> searchResults, List<Map<String, String>> chatHistory) {
         // 构建上下文
         StringBuilder context = new StringBuilder();
@@ -58,16 +67,80 @@ public class LLMService {
                 "3. 回答要简洁明了，逻辑清晰\n" +
                 "4. 可以引用文档中的具体内容，但不要直接复制大段文字";
 
-        return callLLMAPI(systemPrompt, context.toString(), chatHistory);
+        return callLLMAPI(systemPrompt, context.toString(), layeredMessages);
     }
 
     /**
-     * 通用问答（无文档上下文）
+     * 基于文档内容生成回答（RAG模式）- 支持分层上下文和关键信息
      */
-    public String generateGeneralAnswer(String question, List<Map<String, String>> chatHistory) {
-        String systemPrompt = "你是一个智能助手，可以回答各种常识性问题。请用简洁、准确的语言回答问题。";
+    public String generateAnswerWithContext(String question, List<MilvusService.SearchResult> searchResults, 
+                                          List<Map<String, String>> layeredMessages, Map<String, Object> keyInfo) {
+        // 构建上下文
+        StringBuilder context = new StringBuilder();
+        context.append("基于以下文档内容回答问题，回答必须严格基于文档内容，不要编造信息。\n\n");
+        context.append("文档内容：\n");
         
-        return callLLMAPI(systemPrompt, question, chatHistory);
+        for (int i = 0; i < searchResults.size(); i++) {
+            MilvusService.SearchResult result = searchResults.get(i);
+            context.append("【片段").append(i + 1).append("】").append(result.getContent()).append("\n\n");
+        }
+        
+        context.append("用户问题：").append(question).append("\n\n");
+        context.append("请基于上述文档内容回答问题，如果文档中没有相关信息，请明确说明。");
+
+        // 构建Prompt（包含关键信息）
+        StringBuilder systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.append("你是一个专业的文档问答助手。你的任务是基于用户提供的文档内容，准确、清晰地回答用户的问题。\n");
+        
+        // 添加关键信息到系统提示
+        if (keyInfo != null && !keyInfo.isEmpty()) {
+            systemPromptBuilder.append("\n当前对话的关键信息：\n");
+            for (Map.Entry<String, Object> entry : keyInfo.entrySet()) {
+                systemPromptBuilder.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            systemPromptBuilder.append("请保持信息的一致性，不要与上述关键信息冲突。\n");
+        }
+        
+        systemPromptBuilder.append("\n回答要求：\n");
+        systemPromptBuilder.append("1. 严格基于文档内容，不要编造或推测文档中没有的信息\n");
+        systemPromptBuilder.append("2. 如果文档中没有相关信息，明确告知用户\n");
+        systemPromptBuilder.append("3. 回答要简洁明了，逻辑清晰\n");
+        systemPromptBuilder.append("4. 可以引用文档中的具体内容，但不要直接复制大段文字");
+        
+        String systemPrompt = systemPromptBuilder.toString();
+
+        return callLLMAPI(systemPrompt, context.toString(), layeredMessages);
+    }
+
+    /**
+     * 通用问答（无文档上下文）- 支持分层上下文
+     */
+    public String generateGeneralAnswer(String question, List<Map<String, String>> layeredMessages) {
+        // 从分层消息中提取关键信息（如果有）
+        Map<String, Object> keyInfo = extractKeyInfoFromMessages(layeredMessages);
+        
+        StringBuilder systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.append("你是一个智能助手，可以回答各种常识性问题。请用简洁、准确的语言回答问题。\n");
+        
+        // 添加关键信息
+        if (keyInfo != null && !keyInfo.isEmpty()) {
+            systemPromptBuilder.append("\n当前对话的关键信息：\n");
+            for (Map.Entry<String, Object> entry : keyInfo.entrySet()) {
+                systemPromptBuilder.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            systemPromptBuilder.append("请保持信息的一致性，不要与上述关键信息冲突。");
+        }
+        
+        return callLLMAPI(systemPromptBuilder.toString(), question, layeredMessages);
+    }
+
+    /**
+     * 从消息中提取关键信息
+     */
+    private Map<String, Object> extractKeyInfoFromMessages(List<Map<String, String>> messages) {
+        // 简化实现：从系统消息中提取关键信息
+        // 实际应该从LayeredContext中获取
+        return new HashMap<>();
     }
 
     /**
