@@ -1,0 +1,50 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  main:
+    web-application-type: reactive
+  profiles:
+    include: common
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=0  # 保留完整路径
+        - id: file-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/file/**
+          filters:
+            - StripPrefix=0
+        - id: document-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/document/**
+          filters:
+            - StripPrefix=0
+        - id: chat-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - StripPrefix=0
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: debug
+    com.smartdoc: debug
+

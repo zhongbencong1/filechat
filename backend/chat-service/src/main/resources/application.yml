@@ -1,0 +1,13 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: chat-service
+  profiles:
+    include: common
+
+# MyBatis Plus服务特定配置
+mybatis-plus:
+  type-aliases-package: com.smartdoc.chatservice.entity
+

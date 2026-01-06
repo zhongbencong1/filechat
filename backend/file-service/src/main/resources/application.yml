@@ -1,0 +1,13 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: file-service
+  profiles:
+    include: common
+
+# MyBatis Plus服务特定配置
+mybatis-plus:
+  type-aliases-package: com.smartdoc.fileservice.entity
+

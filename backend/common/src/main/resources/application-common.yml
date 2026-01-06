@@ -1,0 +1,77 @@
+# 统一配置 - 所有服务共享的基础配置
+# 通过 spring.profiles.include: common 引入此配置
+
+# MySQL数据库配置
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:smart_doc_qa}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # Redis配置
+  redis:
+    host: 8.140.21.41
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:0}
+    password: ${REDIS_PASSWORD:}
+    timeout: 3000
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1
+
+# MinIO对象存储配置
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:documents}
+
+# Milvus向量数据库配置
+milvus:
+  host: ${MILVUS_HOST:localhost}
+  port: ${MILVUS_PORT:19530}
+  collection: ${MILVUS_COLLECTION:document_vectors}
+  timeout: ${MILVUS_TIMEOUT:30000}
+
+# AI服务配置
+ai:
+  # Embedding服务配置
+  embedding:
+    api-url: ${EMBEDDING_API_URL:http://localhost:8000/v1/embeddings}
+    model: ${EMBEDDING_MODEL:text-embedding-ada-002}
+    timeout: ${EMBEDDING_TIMEOUT:30000}
+    dimension: ${EMBEDDING_DIMENSION:768}
+  
+  # 大语言模型配置
+  llm:
+    api-url: ${LLM_API_URL:https://api.deepseek.com/v1/chat/completions}
+    api-key: ${LLM_API_KEY:your-deepseek-api-key}
+    model: ${LLM_MODEL:deepseek-chat}
+    timeout: ${LLM_TIMEOUT:60000}
+    max-tokens: ${LLM_MAX_TOKENS:2000}
+    temperature: ${LLM_TEMPERATURE:0.7}
+
+# MyBatis Plus通用配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 日志配置
+logging:
+  level:
+    root: info
+    com.smartdoc: ${LOG_LEVEL:debug}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"

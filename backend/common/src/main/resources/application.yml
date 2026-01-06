@@ -1,0 +1,5 @@
+# Common模块默认配置
+spring:
+  profiles:
+    active: common
+
