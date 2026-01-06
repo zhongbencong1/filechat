@@ -1,5 +1,6 @@
 package com.smartdoc.aiengine.service;
 
+import com.smartdoc.aiengine.service.LLMService.ChatMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -33,7 +34,7 @@ public class ShortTermMemoryService {
      * @return 最近N轮对话
      */
     @SuppressWarnings("unchecked")
-    public List<LLMService.ChatMessage> getShortTermMemory(Long userId, Long documentId, int windowSize) {
+    public List<ChatMessage> getShortTermMemory(Long userId, Long documentId, int windowSize) {
         if (redisTemplate == null) {
             log.warn("Redis未配置，返回空短期记忆");
             return new ArrayList<>();
@@ -47,16 +48,16 @@ public class ShortTermMemoryService {
             }
 
             // 转换为ChatMessage列表
-            List<LLMService.ChatMessage> messages = new ArrayList<>();
+            List<ChatMessage> messages = new ArrayList<>();
             for (Object raw : rawMessages) {
-                if (raw instanceof LLMService.ChatMessage) {
-                    messages.add((LLMService.ChatMessage) raw);
+                if (raw instanceof ChatMessage) {
+                    messages.add((ChatMessage) raw);
                 }
             }
 
             // 滑动窗口：只返回最近N轮对话
             int startIndex = Math.max(0, messages.size() - windowSize);
-            List<LLMService.ChatMessage> windowMessages = messages.subList(startIndex, messages.size());
+            List<ChatMessage> windowMessages = messages.subList(startIndex, messages.size());
             
             log.debug("获取短期记忆: userId={}, documentId={}, 总数={}, 窗口大小={}", 
                     userId, documentId, messages.size(), windowMessages.size());
@@ -83,18 +84,18 @@ public class ShortTermMemoryService {
         String key = buildKey(userId, documentId);
         try {
             // 添加用户问题
-            LLMService.ChatMessage userMessage = new LLMService.ChatMessage("user", question);
+            ChatMessage userMessage = new ChatMessage("user", question);
             redisTemplate.opsForList().rightPush(key, userMessage);
             
             // 添加助手回答
-            LLMService.ChatMessage assistantMessage = new LLMService.ChatMessage("assistant", answer);
+            ChatMessage assistantMessage = new ChatMessage("assistant", answer);
             redisTemplate.opsForList().rightPush(key, assistantMessage);
             
             // 设置过期时间
             redisTemplate.expire(key, EXPIRE_HOURS, TimeUnit.HOURS);
             
             // 限制列表长度（防止无限增长）
-            long size = redisTemplate.opsForList().size(key);
+            Long size = redisTemplate.opsForList().size(key);
             if (size != null && size > DEFAULT_WINDOW_SIZE * 2) {
                 // 只保留最近N轮对话（每轮2条消息：问题+回答）
                 long trimSize = DEFAULT_WINDOW_SIZE * 2;

@@ -34,14 +34,6 @@ public class LLMService {
     private String model;
 
     /**
-     * 基于文档内容生成回答（RAG模式）- 使用分层上下文
-     */
-    public String generateAnswerWithContext(String question, List<MilvusService.SearchResult> searchResults, 
-                                          List<Map<String, String>> layeredMessages) {
-        return generateAnswerWithContext(question, searchResults, layeredMessages, null);
-    }
-
-    /**
      * 基于文档内容生成回答（RAG模式）- 兼容旧版本
      */
     @Deprecated
@@ -67,7 +59,7 @@ public class LLMService {
                 "3. 回答要简洁明了，逻辑清晰\n" +
                 "4. 可以引用文档中的具体内容，但不要直接复制大段文字";
 
-        return callLLMAPI(systemPrompt, context.toString(), layeredMessages);
+        return callLLMAPI(systemPrompt, context.toString(), chatHistory);
     }
 
     /**
